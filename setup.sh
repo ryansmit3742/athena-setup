@@ -237,12 +237,15 @@ IP="$(hc GET "/servers/$SERVER_ID" | jsonq "d['server']['public_net']['ipv4']['i
 ok "Server created at $IP."
 
 SSH=(ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes "root@$IP")
+# -n keeps ssh's hands off stdin: under `curl | bash`, stdin is the script itself, and a
+# bare ssh call would swallow the rest of it (bash then exits 0 at "EOF", silently).
+SSHN=("${SSH[@]:0:${#SSH[@]}-1}" -n "root@$IP")
 say "Waiting for it to finish booting (up to a few minutes)…"
 for _ in $(seq 1 60); do
-  if "${SSH[@]}" test -f /var/lib/athena-cloud-init-done 2>/dev/null; then break; fi
+  if "${SSHN[@]}" test -f /var/lib/athena-cloud-init-done 2>/dev/null; then break; fi
   sleep 10
 done
-"${SSH[@]}" test -f /var/lib/athena-cloud-init-done || { fail "The server didn't finish booting in time. Try running this again in a few minutes. It picks up where it left off."; exit 1; }
+"${SSHN[@]}" test -f /var/lib/athena-cloud-init-done || { fail "The server didn't finish booting in time. Try running this again in a few minutes. It picks up where it left off."; exit 1; }
 ok "Server is ready."
 
 say "Downloading Athena…"
@@ -255,7 +258,7 @@ rm -rf "$WORKDIR/athena/.git"
 ok "Downloaded."
 
 say "Uploading it to your server…"
-"${SSH[@]}" "mkdir -p /root/athena"
+"${SSHN[@]}" "mkdir -p /root/athena"
 tar -C "$WORKDIR/athena" -cf - . | "${SSH[@]}" "tar -x -C /root/athena"
 ok "Uploaded."
 
@@ -271,11 +274,11 @@ ENV
 ok "Done."
 
 head1 "Installing Athena (this takes a few minutes, hang tight)"
-"${SSH[@]}" "bash /root/athena/deploy/cloud/install.sh"
+"${SSHN[@]}" "bash /root/athena/deploy/cloud/install.sh"
 
 head1 "You're all set, $USER_NAME"
-APP_URL="$("${SSH[@]}" cat /root/athena/app-url 2>/dev/null || true)"
-APP_TOKEN="$("${SSH[@]}" cat /root/athena/app-token 2>/dev/null || true)"
+APP_URL="$("${SSHN[@]}" cat /root/athena/app-url 2>/dev/null || true)"
+APP_TOKEN="$("${SSHN[@]}" cat /root/athena/app-token 2>/dev/null || true)"
 say "Go back to the Athena app on your phone and enter:"
 say ""
 say "  App URL:   ${APP_URL:-<run: ssh -i $SSH_KEY_PATH root@$IP cat /root/athena/app-url>}"
