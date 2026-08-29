@@ -59,7 +59,7 @@ ask() {
     fi
     value="$(printf '%s' "$value" | xargs)"   # trim whitespace
     if [ -z "$value" ]; then
-      fail "Can't be empty — paste the value and press Return."
+      fail "Can't be empty. Paste the value and press Return."
       continue
     fi
     if [ -n "$pattern" ] && ! [[ "$value" =~ $pattern ]]; then
@@ -90,7 +90,7 @@ head1 "Setting up your own Athena"
 say "This creates a small private server, puts Athena on it, and hands you back an App"
 say "URL and a token to paste into the iPhone app. Takes about 15 minutes. Nothing you"
 say "type here is stored by this script or sent anywhere except Hetzner and your own new"
-say "server — both of which you're about to create and own."
+say "server, both of which you're about to create and own."
 say ""
 read -r -p "Press Return to start… "
 
@@ -192,14 +192,14 @@ for _ in $(seq 1 60); do
   if "${SSH[@]}" test -f /var/lib/athena-cloud-init-done 2>/dev/null; then break; fi
   sleep 10
 done
-"${SSH[@]}" test -f /var/lib/athena-cloud-init-done || { fail "The server didn't finish booting in time. Try running this again in a few minutes — it picks up where it left off."; exit 1; }
+"${SSH[@]}" test -f /var/lib/athena-cloud-init-done || { fail "The server didn't finish booting in time. Try running this again in a few minutes. It picks up where it left off."; exit 1; }
 ok "Server is ready."
 
 say "Downloading Athena…"
 ATHENA_TOKEN="$(curl -fsSL --max-time 30 "$TOKEN_MINT_URL" | python3 -c 'import sys, json; print(json.load(sys.stdin)["token"])')" \
-  || { fail "Couldn't reach the download service — check your internet connection and try again."; exit 1; }
+  || { fail "Couldn't reach the download service. Check your internet connection and try again."; exit 1; }
 git clone --depth 1 -q "https://x-access-token:${ATHENA_TOKEN}@github.com/${SOURCE_REPO}.git" "$WORKDIR/athena" \
-  || { fail "The download didn't work — try running this again in a minute."; exit 1; }
+  || { fail "The download didn't work. Try running this again in a minute."; exit 1; }
 rm -rf "$WORKDIR/athena/.git"
 ok "Downloaded."
 
