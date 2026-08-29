@@ -207,8 +207,9 @@ ok "Server is ready."
 say "Downloading Athena…"
 ATHENA_TOKEN="$(curl -fsSL --max-time 30 "$TOKEN_MINT_URL" | python3 -c 'import sys, json; print(json.load(sys.stdin)["token"])')" \
   || { fail "Couldn't reach the download service. Check your internet connection and try again."; exit 1; }
-git clone --depth 1 -q "https://x-access-token:${ATHENA_TOKEN}@github.com/${SOURCE_REPO}.git" "$WORKDIR/athena" \
+git clone --depth 1 -q -b release "https://x-access-token:${ATHENA_TOKEN}@github.com/${SOURCE_REPO}.git" "$WORKDIR/athena" \
   || { fail "The download didn't work. Try running this again in a minute."; exit 1; }
+git -C "$WORKDIR/athena" rev-parse HEAD > "$WORKDIR/athena/RELEASE"
 rm -rf "$WORKDIR/athena/.git"
 ok "Downloaded."
 
