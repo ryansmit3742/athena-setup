@@ -66,7 +66,7 @@ ask() {
   while true; do
     if [ "$secret" = "secret" ]; then
       read -r -s -p "$prompt " value < /dev/tty || { fail "Input ended unexpectedly."; exit 1; }
-      printf '\n'
+      printf '\n' >&2
     else
       read -r -p "$prompt " value < /dev/tty || { fail "Input ended unexpectedly."; exit 1; }
     fi
