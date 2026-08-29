@@ -93,7 +93,22 @@ hc() {  # hc METHOD PATH [JSON]  — talk to the Hetzner API
     curl -sS --http1.1 -X "$method" "$API$path" -H "Authorization: Bearer $HCLOUD_TOKEN"
   fi
 }
-jsonq() { python3 -c "import sys, json; d = json.load(sys.stdin); print(eval(sys.argv[1]))" "$1"; }
+jsonq() {
+  # Parse a Hetzner reply; if it is an error object (rate limit, bad token, anything),
+  # say so in one readable line instead of dying with a Python traceback.
+  python3 -c "
+import sys, json
+raw = sys.stdin.read()
+try:
+    d = json.loads(raw)
+except ValueError:
+    sys.stderr.write('Unexpected reply from Hetzner: ' + raw[:300] + chr(10)); sys.exit(1)
+if isinstance(d, dict) and 'error' in d:
+    e = d.get('error') or {}
+    sys.stderr.write('Hetzner said: ' + str(e.get('message') or e)[:300] + chr(10)); sys.exit(1)
+print(eval(sys.argv[1]))
+" "$1"
+}
 
 # ---------------------------------------------------------------------------
 # Welcome
