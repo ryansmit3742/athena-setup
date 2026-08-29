@@ -315,3 +315,6 @@ say "  App URL:   ${APP_URL:-<run: ssh -i $SSH_KEY_PATH root@$IP cat /root/athen
 say "  App token: ${APP_TOKEN:-<run: ssh -i $SSH_KEY_PATH root@$IP cat /root/athena/app-token>}"
 say ""
 say "That's the whole login. Keep this terminal window until you've copied both."
+say ""
+say "If the app says it can't reach the server: install the Tailscale app on your"
+say "iPhone from the App Store and sign in with the same account you used in Step 4."
