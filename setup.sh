@@ -265,6 +265,30 @@ tar -C "$WORKDIR/athena" -cf - . | "${SSH[@]}" "tar -x --no-same-owner -C /root/
 ok "Uploaded."
 
 say "Uploading your settings…"
+# Push notifications: fetch the push key from the same gate that serves the source.
+# Optional on purpose; if it can't be fetched, the install still works, just without pushes.
+APNS_JSON="$(curl -fsSL --max-time 20 "${TOKEN_MINT_URL}apns" 2>/dev/null || true)"
+APNS_KEY_B64="$(printf '%s' "$APNS_JSON" | python3 -c 'import sys, json
+try:
+    print(json.load(sys.stdin).get("key_b64", ""))
+except Exception:
+    print("")' 2>/dev/null || true)"
+APNS_KEY_ID="$(printf '%s' "$APNS_JSON" | python3 -c 'import sys, json
+try:
+    print(json.load(sys.stdin).get("key_id", ""))
+except Exception:
+    print("")' 2>/dev/null || true)"
+APNS_TEAM_ID="$(printf '%s' "$APNS_JSON" | python3 -c 'import sys, json
+try:
+    print(json.load(sys.stdin).get("team_id", ""))
+except Exception:
+    print("")' 2>/dev/null || true)"
+APNS_BUNDLE_ID="$(printf '%s' "$APNS_JSON" | python3 -c 'import sys, json
+try:
+    print(json.load(sys.stdin).get("bundle_id", ""))
+except Exception:
+    print("")' 2>/dev/null || true)"
+
 "${SSH[@]}" "umask 077 && cat > /root/athena/deploy/cloud/provision.env" <<ENV
 ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
 OPENAI_API_KEY=$OPENAI_API_KEY
@@ -272,6 +296,10 @@ USER_NAME=$USER_NAME
 USER_TIMEZONE=$USER_TIMEZONE
 TUNNEL=tailscale
 TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY
+APNS_KEY_B64=$APNS_KEY_B64
+APNS_KEY_ID=$APNS_KEY_ID
+APNS_TEAM_ID=$APNS_TEAM_ID
+APNS_BUNDLE_ID=$APNS_BUNDLE_ID
 ENV
 ok "Done."
 
