@@ -12,10 +12,11 @@
 # new server (to configure Athena). This script and this repo never see or store your keys.
 set -euo pipefail
 
-# --- Athena's own source lives in a private repo. Whoever sent you this link gives you a
-# deploy key separately (a block of text starting with -----BEGIN OPENSSH PRIVATE KEY-----),
-# never published here -- paste it in when asked below.
-SOURCE_REPO="git@github.com:ryansmit3742/athena.git"
+# --- Athena's own source lives in a private repo. A small token service mints a fresh,
+# one-hour, read-only download credential automatically each run — nothing to paste,
+# nothing anyone has to send you, nothing stored.
+TOKEN_MINT_URL="https://athena-source-gate.athena-gate.workers.dev/"
+SOURCE_REPO="ryansmit3742/athena"
 CLOUD_INIT_URL="https://raw.githubusercontent.com/ryansmit3742/athena-setup/main/cloud-init.yaml"
 API="https://api.hetzner.cloud/v1"
 WORKDIR="$(mktemp -d)"
@@ -94,20 +95,20 @@ say ""
 read -r -p "Press Return to start… "
 
 # ---------------------------------------------------------------------------
-# Step 1 of 5: Hetzner (the server itself)
+# Step 1 of 4: Hetzner (the server itself)
 # ---------------------------------------------------------------------------
 HCLOUD_TOKEN="$(ask \
-  "Step 1 of 5 — Hetzner (your server)" \
+  "Step 1 of 4 — Hetzner (your server)" \
   "This is the actual computer Athena will run on, about \$5/month. Go to the link below, sign up (needs a payment method), click \"New project\" and name it anything, then inside that project go to Security → API Tokens → Generate API Token with Read & Write permission. Paste it below." \
   "https://console.hetzner.cloud" \
   "Hetzner API token:" \
   '^.{20,}$')"   # loose on purpose: exact Hetzner format could change, don't risk trapping someone in a retry loop
 
 # ---------------------------------------------------------------------------
-# Step 2 of 5: Anthropic (Athena's mind)
+# Step 2 of 4: Anthropic (Athena's mind)
 # ---------------------------------------------------------------------------
 ANTHROPIC_API_KEY="$(ask \
-  "Step 2 of 5 — Anthropic (Athena's mind)" \
+  "Step 2 of 4 — Anthropic (Athena's mind)" \
   "This is Claude, the AI model behind everything Athena says. Sign up at the link below, go to Settings → Plans & Billing and add a card with auto-reload on, then Settings → API Keys → Create Key. Paste it below." \
   "https://console.anthropic.com" \
   "Anthropic API key:" \
@@ -115,10 +116,10 @@ ANTHROPIC_API_KEY="$(ask \
   secret)"
 
 # ---------------------------------------------------------------------------
-# Step 3 of 5: OpenAI (memory search)
+# Step 3 of 4: OpenAI (memory search)
 # ---------------------------------------------------------------------------
 OPENAI_API_KEY="$(ask \
-  "Step 3 of 5 — OpenAI (her memory search)" \
+  "Step 3 of 4 — OpenAI (her memory search)" \
   "This powers finding an old note or fact when you ask for it — usage is tiny, usually cents a month. Sign up at the link below, add a few dollars of credit under Settings → Billing, then API Keys → Create new secret key. Paste it below." \
   "https://platform.openai.com" \
   "OpenAI API key:" \
@@ -126,32 +127,14 @@ OPENAI_API_KEY="$(ask \
   secret)"
 
 # ---------------------------------------------------------------------------
-# Step 4 of 5: Tailscale (keeps it private)
+# Step 4 of 4: Tailscale (keeps it private)
 # ---------------------------------------------------------------------------
 TAILSCALE_AUTH_KEY="$(ask \
-  "Step 4 of 5 — Tailscale (keeps it private)" \
+  "Step 4 of 4 — Tailscale (keeps it private)" \
   "A private network between just your phone and Athena's server — nothing about her is ever exposed to the public internet. Sign in at the link below with Google, Microsoft, or Apple, then Settings → Keys → Generate auth key. Paste it below. (Also install the Tailscale app on your iPhone and sign in with the same account — you can do that anytime before or after this finishes.)" \
   "https://login.tailscale.com" \
   "Tailscale auth key:" \
   '^tskey-')"
-
-head1 "Step 5 of 5 -- Athena's source"
-say "Whoever sent you this link should have given you a deploy key separately (a text, an"
-say "email -- not a public page): several lines starting with -----BEGIN OPENSSH PRIVATE KEY-----."
-say "Paste the whole block below, then press Return."
-say ""
-DEPLOY_KEY_FILE="$(mktemp)"
-trap 'rm -f "$DEPLOY_KEY_FILE"' EXIT
-while IFS= read -r deploy_key_line; do
-  printf '%s\n' "$deploy_key_line" >> "$DEPLOY_KEY_FILE"
-  [[ "$deploy_key_line" == *"END OPENSSH PRIVATE KEY"* ]] && break
-done
-chmod 600 "$DEPLOY_KEY_FILE"
-if ! grep -q "BEGIN OPENSSH PRIVATE KEY" "$DEPLOY_KEY_FILE"; then
-  fail "That didn't look like a key -- check with whoever gave it to you and try again."
-  exit 1
-fi
-ok "Got it."
 
 head1 "One more thing"
 read -r -p "What's your first name? Athena will use it. " USER_NAME
@@ -213,9 +196,10 @@ done
 ok "Server is ready."
 
 say "Downloading Athena…"
-GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY_FILE -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes" \
-  git clone --depth 1 -q "$SOURCE_REPO" "$WORKDIR/athena" \
-  || { fail "Couldn't download Athena's source -- double check the key with whoever gave it to you."; exit 1; }
+ATHENA_TOKEN="$(curl -fsSL --max-time 30 "$TOKEN_MINT_URL" | python3 -c 'import sys, json; print(json.load(sys.stdin)["token"])')" \
+  || { fail "Couldn't reach the download service — check your internet connection and try again."; exit 1; }
+git clone --depth 1 -q "https://x-access-token:${ATHENA_TOKEN}@github.com/${SOURCE_REPO}.git" "$WORKDIR/athena" \
+  || { fail "The download didn't work — try running this again in a minute."; exit 1; }
 rm -rf "$WORKDIR/athena/.git"
 ok "Downloaded."
 

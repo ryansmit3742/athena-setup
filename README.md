@@ -16,9 +16,10 @@ Nothing you type into the wizard is stored by this script or sent anywhere excep
 
 ## What this repo is
 
-Just the setup wizard. Athena's actual code lives in a private repository; `setup.sh`
-downloads it onto your new server directly — you never need access to that repository
-yourself, and it's never made public. See `setup.sh` for exactly what it does; it's a plain
+Just the setup wizard. Athena's actual code lives in a private repository; the wizard
+fetches a fresh, one-hour, read-only download credential automatically and pulls the code
+straight onto your new server — you never need access to that repository yourself, and
+there's nothing to paste or be sent. See `setup.sh` for exactly what it does; it's a plain
 shell script, nothing hidden.
 
 ## If something goes wrong partway through
