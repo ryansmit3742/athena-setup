@@ -84,11 +84,13 @@ ask() {
 }
 
 hc() {  # hc METHOD PATH [JSON]  — talk to the Hetzner API
+  # --http1.1: macOS curl intermittently fails against this API with
+  # "Error in the HTTP2 framing layer"; HTTP/1.1 sidesteps it.
   local method="$1" path="$2" body="${3:-}"
   if [ -n "$body" ]; then
-    curl -sS -X "$method" "$API$path" -H "Authorization: Bearer $HCLOUD_TOKEN" -H "Content-Type: application/json" -d "$body"
+    curl -sS --http1.1 -X "$method" "$API$path" -H "Authorization: Bearer $HCLOUD_TOKEN" -H "Content-Type: application/json" -d "$body"
   else
-    curl -sS -X "$method" "$API$path" -H "Authorization: Bearer $HCLOUD_TOKEN"
+    curl -sS --http1.1 -X "$method" "$API$path" -H "Authorization: Bearer $HCLOUD_TOKEN"
   fi
 }
 jsonq() { python3 -c "import sys, json; d = json.load(sys.stdin); print(eval(sys.argv[1]))" "$1"; }
