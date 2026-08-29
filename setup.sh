@@ -101,7 +101,7 @@ HCLOUD_TOKEN="$(ask \
   "This is the actual computer Athena will run on, about \$5/month. Go to the link below, sign up (needs a payment method), click \"New project\" and name it anything, then inside that project go to Security → API Tokens → Generate API Token with Read & Write permission. Paste it below." \
   "https://console.hetzner.cloud" \
   "Hetzner API token:" \
-  '^[A-Za-z0-9]{32,80}$')"
+  '^.{20,}$')"   # loose on purpose: exact Hetzner format could change, don't risk trapping someone in a retry loop
 
 # ---------------------------------------------------------------------------
 # Step 2 of 5: Anthropic (Athena's mind)
