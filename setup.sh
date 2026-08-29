@@ -12,6 +12,14 @@
 # new server (to configure Athena). This script and this repo never see or store your keys.
 set -euo pipefail
 
+# Run via `curl | bash`, stdin is the script text, not the keyboard. Every question below
+# must come from the real terminal, or `read` eats the script and loops forever.
+if [ ! -t 0 ]; then
+  exec < /dev/tty || { echo "This wizard needs an interactive terminal. Download setup.sh and run: bash setup.sh" >&2; exit 1; }
+fi
+
+trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
+
 # --- Athena's own source lives in a private repo. A small token service mints a fresh,
 # one-hour, read-only download credential automatically each run — nothing to paste,
 # nothing anyone has to send you, nothing stored.
@@ -53,11 +61,12 @@ ask() {
   say ""
   while true; do
     if [ "$secret" = "secret" ]; then
-      read -r -s -p "$prompt " value; printf '\n'
+      read -r -s -p "$prompt " value || { fail "Input ended unexpectedly."; exit 1; }
+      printf '\n'
     else
-      read -r -p "$prompt " value
+      read -r -p "$prompt " value || { fail "Input ended unexpectedly."; exit 1; }
     fi
-    value="$(printf '%s' "$value" | xargs)"   # trim whitespace
+    value="$(trim "$value")"
     if [ -z "$value" ]; then
       fail "Can't be empty. Paste the value and press Return."
       continue
@@ -92,7 +101,7 @@ say "URL and a token to paste into the iPhone app. Takes about 15 minutes. Nothi
 say "type here is stored by this script or sent anywhere except Hetzner and your own new"
 say "server, both of which you're about to create and own."
 say ""
-read -r -p "Press Return to start… "
+read -r -p "Press Return to start… " _ || { echo "This wizard needs an interactive terminal." >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
 # Step 1 of 4: Hetzner (the server itself)
@@ -137,13 +146,13 @@ TAILSCALE_AUTH_KEY="$(ask \
   '^tskey-')"
 
 head1 "One more thing"
-read -r -p "What's your first name? Athena will use it. " USER_NAME
-USER_NAME="$(printf '%s' "${USER_NAME:-there}" | xargs)"
+read -r -p "What's your first name? Athena will use it. " USER_NAME || USER_NAME=""
+USER_NAME="$(trim "${USER_NAME:-there}")"
 DETECTED_TZ=""
 if [ -f /etc/localtime ]; then
   DETECTED_TZ="$(readlink /etc/localtime 2>/dev/null | sed -n 's#.*/zoneinfo/##p')"
 fi
-read -r -p "Your timezone [${DETECTED_TZ:-America/New_York}]: " USER_TIMEZONE
+read -r -p "Your timezone [${DETECTED_TZ:-America/New_York}]: " USER_TIMEZONE || USER_TIMEZONE=""
 USER_TIMEZONE="${USER_TIMEZONE:-${DETECTED_TZ:-America/New_York}}"
 
 # ---------------------------------------------------------------------------
