@@ -259,7 +259,9 @@ ok "Downloaded."
 
 say "Uploading it to your server…"
 "${SSHN[@]}" "mkdir -p /root/athena"
-tar -C "$WORKDIR/athena" -cf - . | "${SSH[@]}" "tar -x -C /root/athena"
+# --no-same-owner: without it, tar-as-root preserves the Mac user's numeric uid on every
+# file, and the hardened service (no CAP_DAC_OVERRIDE) cannot write its own data dirs.
+tar -C "$WORKDIR/athena" -cf - . | "${SSH[@]}" "tar -x --no-same-owner -C /root/athena"
 ok "Uploaded."
 
 say "Uploading your settings…"
