@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Athena setup wizard — creates your own private Athena server, end to end, from a Mac
+# Athena setup wizard: creates your own private Athena server, end to end, from a Mac
 # terminal with no prior setup. Run it with:
 #
 #   curl -fsSL https://raw.githubusercontent.com/ryansmit3742/athena-setup/main/setup.sh | bash
@@ -98,7 +98,7 @@ read -r -p "Press Return to start… "
 # Step 1 of 4: Hetzner (the server itself)
 # ---------------------------------------------------------------------------
 HCLOUD_TOKEN="$(ask \
-  "Step 1 of 4 — Hetzner (your server)" \
+  "Step 1 of 4: Hetzner (your server)" \
   "This is the actual computer Athena will run on, about \$5/month. Go to the link below, sign up (needs a payment method), click \"New project\" and name it anything, then inside that project go to Security → API Tokens → Generate API Token with Read & Write permission. Paste it below." \
   "https://console.hetzner.cloud" \
   "Hetzner API token:" \
@@ -108,7 +108,7 @@ HCLOUD_TOKEN="$(ask \
 # Step 2 of 4: Anthropic (Athena's mind)
 # ---------------------------------------------------------------------------
 ANTHROPIC_API_KEY="$(ask \
-  "Step 2 of 4 — Anthropic (Athena's mind)" \
+  "Step 2 of 4: Anthropic (Athena's mind)" \
   "This is Claude, the AI model behind everything Athena says. Sign up at the link below, go to Settings → Plans & Billing and add a card with auto-reload on, then Settings → API Keys → Create Key. Paste it below." \
   "https://console.anthropic.com" \
   "Anthropic API key:" \
@@ -119,8 +119,8 @@ ANTHROPIC_API_KEY="$(ask \
 # Step 3 of 4: OpenAI (memory search)
 # ---------------------------------------------------------------------------
 OPENAI_API_KEY="$(ask \
-  "Step 3 of 4 — OpenAI (her memory search)" \
-  "This powers finding an old note or fact when you ask for it — usage is tiny, usually cents a month. Sign up at the link below, add a few dollars of credit under Settings → Billing, then API Keys → Create new secret key. Paste it below." \
+  "Step 3 of 4: OpenAI (her memory search)" \
+  "This powers finding an old note or fact when you ask for it, usage is tiny, usually cents a month. Sign up at the link below, add a few dollars of credit under Settings → Billing, then API Keys → Create new secret key. Paste it below." \
   "https://platform.openai.com" \
   "OpenAI API key:" \
   '^sk-' \
@@ -130,8 +130,8 @@ OPENAI_API_KEY="$(ask \
 # Step 4 of 4: Tailscale (keeps it private)
 # ---------------------------------------------------------------------------
 TAILSCALE_AUTH_KEY="$(ask \
-  "Step 4 of 4 — Tailscale (keeps it private)" \
-  "A private network between just your phone and Athena's server — nothing about her is ever exposed to the public internet. Sign in at the link below with Google, Microsoft, or Apple, then Settings → Keys → Generate auth key. Paste it below. (Also install the Tailscale app on your iPhone and sign in with the same account — you can do that anytime before or after this finishes.)" \
+  "Step 4 of 4: Tailscale (keeps it private)" \
+  "A private network between just your phone and Athena's server. Nothing about her is ever exposed to the public internet. Sign in at the link below with Google, Microsoft, or Apple, then Settings → Keys → Generate auth key. Paste it below. (Also install the Tailscale app on your iPhone and sign in with the same account. You can do that anytime before or after this finishes.)" \
   "https://login.tailscale.com" \
   "Tailscale auth key:" \
   '^tskey-')"
@@ -219,7 +219,7 @@ TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY
 ENV
 ok "Done."
 
-head1 "Installing Athena (this takes a few minutes — hang tight)"
+head1 "Installing Athena (this takes a few minutes, hang tight)"
 "${SSH[@]}" "bash /root/athena/deploy/cloud/install.sh"
 
 head1 "You're all set, $USER_NAME"
