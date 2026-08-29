@@ -192,7 +192,10 @@ PUBKEY="$(cat "$SSH_KEY_PATH.pub")"
 KEY_NAME="athena-$SERVER_NAME"
 KEY_ID="$(hc GET "/ssh_keys?name=$KEY_NAME" | jsonq "(d['ssh_keys'][0]['id'] if d['ssh_keys'] else '')")"
 if [ -z "$KEY_ID" ]; then
-  KEY_ID="$(hc POST /ssh_keys "$(python3 -c "import json,sys; print(json.dumps({'name': sys.argv[1], 'public_key': sys.argv[2]}))" "$KEY_NAME" "$PUBKEY")" | jsonq "d['ssh_key']['id']")"
+  # Two steps, not nested substitutions: macOS ships bash 3.2, whose parser mangles
+  # double-nested quoted $(...), brace-expanding the inner python and emptying the body.
+  KEY_BODY="$(python3 -c 'import json,sys; print(json.dumps({"name": sys.argv[1], "public_key": sys.argv[2]}))' "$KEY_NAME" "$PUBKEY")"
+  KEY_ID="$(hc POST /ssh_keys "$KEY_BODY" | jsonq "d['ssh_key']['id']")"
 fi
 ok "SSH key ready."
 
