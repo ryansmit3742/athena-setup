@@ -56,11 +56,13 @@ link()  { printf '%s%s%s\n' "$BLUE" "$1" "$RESET"; }
 ask() {
   local label="$1" why="$2" url="$3" prompt="$4" pattern="$5" secret="${6:-}"
   local value=""
-  head1 "$label"
-  say "$why"
-  say ""
-  link "$url"
-  say ""
+  # ask() runs inside $(...): stdout IS the return value, so every display line must go
+  # to stderr or it gets captured into the variable along with the answer.
+  head1 "$label" >&2
+  say "$why" >&2
+  say "" >&2
+  link "$url" >&2
+  say "" >&2
   while true; do
     if [ "$secret" = "secret" ]; then
       read -r -s -p "$prompt " value < /dev/tty || { fail "Input ended unexpectedly."; exit 1; }
@@ -77,7 +79,7 @@ ask() {
       fail "That doesn't look like the right format. Double check you copied the whole thing, then try again."
       continue
     fi
-    ok "Got it."
+    ok "Got it." >&2
     printf '%s' "$value"
     return 0
   done
