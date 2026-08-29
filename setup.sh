@@ -129,7 +129,7 @@ read -r -p "Press Return to start… " _ < /dev/tty || { echo "This wizard needs
 # ---------------------------------------------------------------------------
 HCLOUD_TOKEN="$(ask \
   "Step 1 of 4: Hetzner (your server)" \
-  "This is the actual computer Athena will run on, about \$8/month. Go to the link below, sign up (needs a payment method), click \"New project\" and name it anything, then inside that project go to Security → API Tokens → Generate API Token with Read & Write permission. Paste it below." \
+  "This is the actual computer Athena will run on, about \$7/month. Go to the link below, sign up (needs a payment method), click \"New project\" and name it anything, then inside that project go to Security → API Tokens → Generate API Token with Read & Write permission. Paste it below." \
   "https://console.hetzner.cloud" \
   "Hetzner API token:" \
   '^.{20,}$')"   # loose on purpose: exact Hetzner format could change, don't risk trapping someone in a retry loop
@@ -209,11 +209,11 @@ for t in d.get("server_types", []):
     if t.get("deprecation") or t.get("architecture") != "x86" or (t.get("memory") or 0) < 4:
         continue
     for price in t.get("prices", []):
-        if price.get("location") == "ash":
+        if price.get("location") == "fsn1":
             monthly = float(price["price_monthly"]["gross"])
             if best is None or monthly < best[0]:
                 best = (monthly, t["name"])
-print(best[1] if best else "cpx21")
+print(best[1] if best else "cx23")
 ')"
 ok "Using $SERVER_TYPE."
 say "Creating the server (this takes about a minute)…"
@@ -225,7 +225,7 @@ if [ -z "$SERVER_ID" ]; then
 import json, sys
 name, key_id, user_data, server_type = sys.argv[1:5]
 print(json.dumps({
-    "name": name, "server_type": server_type, "location": "ash", "image": "ubuntu-24.04",
+    "name": name, "server_type": server_type, "location": "fsn1", "image": "ubuntu-24.04",
     "ssh_keys": [int(key_id)], "user_data": user_data, "labels": {"app": "athena"},
 }))
 PY
