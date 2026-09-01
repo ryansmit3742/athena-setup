@@ -107,8 +107,14 @@ except ValueError:
     sys.stderr.write('Unexpected reply from Hetzner: ' + raw[:300] + chr(10)); sys.exit(1)
 if isinstance(d, dict) and 'error' in d:
     e = d.get('error') or {}
-    sys.stderr.write('Hetzner said: ' + str(e.get('message') or e)[:300] + chr(10))
-    if e.get('code') in ('resource_limit_exceeded', 'forbidden', 'unauthorized'):
+    msg = str(e.get('message') or e)
+    code = str(e.get('code') or '')
+    sys.stderr.write('Hetzner said: ' + msg[:300] + chr(10))
+    if code == 'forbidden' or 'permission denied' in msg.lower():
+        sys.stderr.write('Your API token is read-only. In the Hetzner console go to your project, Security, API Tokens, Generate API Token, and this time choose Read & Write under Permissions (it defaults to Read). Then run this same command again and paste the new token.' + chr(10))
+    elif code == 'unauthorized':
+        sys.stderr.write('Hetzner did not recognise that token. Generate a new one (project, Security, API Tokens, Read & Write) and run this same command again.' + chr(10))
+    elif code == 'resource_limit_exceeded':
         sys.stderr.write('This usually means the Hetzner account has no payment method yet. Add a card or PayPal at https://console.hetzner.cloud (top-right account menu, Billing), then run this same command again. Your token still works.' + chr(10))
     sys.exit(1)
 print(eval(sys.argv[1]))
@@ -135,7 +141,7 @@ HCLOUD_TOKEN="$(ask \
   "This is the actual computer Athena will run on, about \$7/month. This script creates the server for you, so don't create one yourself. At the link below:
   1. Sign up, then add a payment method (card or PayPal). Hetzner won't create a server without one.
   2. Click \"New project\" and name it anything.
-  3. Inside that project go to Security → API Tokens → Generate API Token, permission Read & Write.
+  3. Inside that project go to Security → API Tokens → Generate API Token. Under Permissions pick Read & Write (it defaults to Read, which won't work).
   4. Paste the token below." \
   "https://console.hetzner.cloud" \
   "Hetzner API token:" \
@@ -183,8 +189,18 @@ DETECTED_TZ=""
 if [ -f /etc/localtime ]; then
   DETECTED_TZ="$(readlink /etc/localtime 2>/dev/null | sed -n 's#.*/zoneinfo/##p')"
 fi
-read -r -p "Your timezone [${DETECTED_TZ:-America/New_York}]: " USER_TIMEZONE < /dev/tty || USER_TIMEZONE=""
-USER_TIMEZONE="${USER_TIMEZONE:-${DETECTED_TZ:-America/New_York}}"
+DEFAULT_TZ="${DETECTED_TZ:-America/New_York}"
+while true; do
+  read -r -p "Your timezone is $DEFAULT_TZ. Press Return to keep it, or type another (like America/Chicago): " USER_TIMEZONE < /dev/tty || USER_TIMEZONE=""
+  USER_TIMEZONE="$(trim "$USER_TIMEZONE")"
+  case "$(printf '%s' "$USER_TIMEZONE" | tr '[:upper:]' '[:lower:]')" in
+    ""|y|yes|ok|keep) USER_TIMEZONE="$DEFAULT_TZ" ;;
+  esac
+  if python3 -c 'import sys, zoneinfo; zoneinfo.ZoneInfo(sys.argv[1])' "$USER_TIMEZONE" 2>/dev/null; then
+    break
+  fi
+  fail "That isn't a timezone name. Press Return to keep $DEFAULT_TZ, or type one like America/Los_Angeles."
+done
 
 # ---------------------------------------------------------------------------
 # Build it
