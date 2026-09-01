@@ -111,11 +111,11 @@ if isinstance(d, dict) and 'error' in d:
     code = str(e.get('code') or '')
     sys.stderr.write('Hetzner said: ' + msg[:300] + chr(10))
     if code == 'forbidden' or 'permission denied' in msg.lower():
-        sys.stderr.write('Your API token is read-only. In the Hetzner console go to your project, Security, API Tokens, Generate API Token, and this time choose Read & Write under Permissions (it defaults to Read). Then run this same command again and paste the new token.' + chr(10))
+        sys.stderr.write('Your API token is read-only. In the Hetzner console go to your project, Security, API Tokens, Generate API Token, and this time choose Read & Write under Permissions (it defaults to Read). Then paste the new token below.' + chr(10))
     elif code == 'unauthorized':
-        sys.stderr.write('Hetzner did not recognise that token. Generate a new one (project, Security, API Tokens, Read & Write) and run this same command again.' + chr(10))
+        sys.stderr.write('Hetzner did not recognise that token. Generate a new one (project, Security, API Tokens, Read & Write) and paste it below.' + chr(10))
     elif code == 'resource_limit_exceeded':
-        sys.stderr.write('This usually means the Hetzner account has no payment method yet. Add a card or PayPal at https://console.hetzner.cloud (top-right account menu, Billing), then run this same command again. Your token still works.' + chr(10))
+        sys.stderr.write('This usually means the Hetzner account has no payment method yet. Add a card or PayPal at https://console.hetzner.cloud (top-right account menu, Billing), then come back here. Your token still works.' + chr(10))
     sys.exit(1)
 print(eval(sys.argv[1]))
 " "$1"
@@ -127,7 +127,8 @@ print(eval(sys.argv[1]))
 clear 2>/dev/null || true
 head1 "Setting up your own Athena"
 say "This creates a small private server, puts Athena on it, and hands you back an App"
-say "URL and a token to paste into the iPhone app. Takes about 15 minutes. Nothing you"
+say "URL and a token to paste into the iPhone app. About 30 minutes, most of it creating"
+say "accounts; the last 10 run on their own. Nothing you"
 say "type here is stored by this script or sent anywhere except Hetzner and your own new"
 say "server, both of which you're about to create and own."
 say ""
@@ -136,16 +137,79 @@ read -r -p "Press Return to start… " _ < /dev/tty || { echo "This wizard needs
 # ---------------------------------------------------------------------------
 # Step 1 of 4: Hetzner (the server itself)
 # ---------------------------------------------------------------------------
-HCLOUD_TOKEN="$(ask \
-  "Step 1 of 4: Hetzner (your server)" \
-  "This is the actual computer Athena will run on, about \$7/month. This script creates the server for you, so don't create one yourself. At the link below:
+# The server is created right here, before the other three keys are asked for. A bad
+# token (read-only is Hetzner's default) or a missing payment method then gets fixed on
+# the spot instead of after everything else has been typed, and the server boots while
+# the user is off collecting the other keys.
+SERVER_NAME="athena"
+SSH_KEY_PATH="$HOME/.ssh/athena-$SERVER_NAME"
+KEY_NAME="athena-$SERVER_NAME"
+if [ ! -f "$SSH_KEY_PATH" ]; then
+  ssh-keygen -q -t ed25519 -N "" -C "athena-$SERVER_NAME" -f "$SSH_KEY_PATH"
+fi
+PUBKEY="$(cat "$SSH_KEY_PATH.pub")"
+# Two steps, not nested substitutions: macOS ships bash 3.2, whose parser mangles
+# double-nested quoted $(...), brace-expanding the inner python and emptying the body.
+KEY_BODY="$(python3 -c 'import json,sys; print(json.dumps({"name": sys.argv[1], "public_key": sys.argv[2]}))' "$KEY_NAME" "$PUBKEY")"
+
+HETZNER_WHY="This is the actual computer Athena will run on, about \$7/month. This script creates the server for you, so don't create one yourself. At the link below:
   1. Sign up, then add a payment method (card or PayPal). Hetzner won't create a server without one.
   2. Click \"New project\" and name it anything.
   3. Inside that project go to Security → API Tokens → Generate API Token. Under Permissions pick Read & Write (it defaults to Read, which won't work).
-  4. Paste the token below." \
-  "https://console.hetzner.cloud" \
-  "Hetzner API token:" \
-  '^.{20,}$')"   # loose on purpose: exact Hetzner format could change, don't risk trapping someone in a retry loop
+  4. Paste the token below."
+while true; do
+  # Token pattern is loose on purpose: the exact format could change, don't trap someone in a retry loop over it.
+  HCLOUD_TOKEN="$(ask "Step 1 of 4: Hetzner (your server)" "$HETZNER_WHY" "https://console.hetzner.cloud" "Hetzner API token:" '^.{20,}$')"
+  say "Checking the token with Hetzner…"
+  # Reading proves the token is real; uploading the SSH key proves it can write.
+  if KEY_ID="$(hc GET "/ssh_keys?name=$KEY_NAME" | jsonq "(d['ssh_keys'][0]['id'] if d['ssh_keys'] else '')")" \
+     && { [ -n "$KEY_ID" ] || KEY_ID="$(hc POST /ssh_keys "$KEY_BODY" | jsonq "d['ssh_key']['id']")"; }; then
+    ok "Token works."
+    break
+  fi
+  say ""
+  say "Let's try that again with a token that has Read & Write permission."
+done
+
+say "Picking a server size…"
+TYPES_JSON="$(hc GET "/server_types?per_page=200")"
+SERVER_TYPE="$(printf '%s' "$TYPES_JSON" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)
+best = None
+for t in d.get("server_types", []):
+    if t.get("deprecation") or t.get("architecture") != "x86" or (t.get("memory") or 0) < 4:
+        continue
+    for price in t.get("prices", []):
+        if price.get("location") == "fsn1":
+            monthly = float(price["price_monthly"]["gross"])
+            if best is None or monthly < best[0]:
+                best = (monthly, t["name"])
+print(best[1] if best else "cx23")
+')"
+ok "Using $SERVER_TYPE."
+CLOUD_INIT="$(curl -fsSL "$CLOUD_INIT_URL")"
+CREATE_BODY="$(python3 - "$SERVER_NAME" "$KEY_ID" "$CLOUD_INIT" "$SERVER_TYPE" <<'PY'
+import json, sys
+name, key_id, user_data, server_type = sys.argv[1:5]
+print(json.dumps({
+    "name": name, "server_type": server_type, "location": "fsn1", "image": "ubuntu-24.04",
+    "ssh_keys": [int(key_id)], "user_data": user_data, "labels": {"app": "athena"},
+}))
+PY
+)"
+while true; do
+  say "Creating the server (this takes about a minute)…"
+  if SERVER_ID="$(hc GET "/servers?name=$SERVER_NAME" | jsonq "(d['servers'][0]['id'] if d['servers'] else '')")" \
+     && { [ -n "$SERVER_ID" ] || SERVER_ID="$(hc POST /servers "$CREATE_BODY" | jsonq "d.get('server', {}).get('id') or sys.exit('create failed: ' + json.dumps(d)[:400])")"; }; then
+    break
+  fi
+  say ""
+  read -r -p "Fix that in the Hetzner console, then press Return here to try again (Ctrl-C stops). " _ < /dev/tty || exit 1
+done
+IP="$(hc GET "/servers/$SERVER_ID" | jsonq "d['server']['public_net']['ipv4']['ip']")"
+ok "Server created at $IP. It's running now, about \$7/month, and finishes booting while you do the next steps."
+info "If you stop before the end, delete it at https://console.hetzner.cloud under Servers so it doesn't keep billing."
 
 # ---------------------------------------------------------------------------
 # Step 2 of 4: Anthropic (Athena's mind)
@@ -206,61 +270,6 @@ done
 # Build it
 # ---------------------------------------------------------------------------
 head1 "Building your server"
-
-SERVER_NAME="athena"
-SSH_KEY_PATH="$HOME/.ssh/athena-$SERVER_NAME"
-
-say "Creating an SSH key…"
-if [ ! -f "$SSH_KEY_PATH" ]; then
-  ssh-keygen -q -t ed25519 -N "" -C "athena-$SERVER_NAME" -f "$SSH_KEY_PATH"
-fi
-PUBKEY="$(cat "$SSH_KEY_PATH.pub")"
-KEY_NAME="athena-$SERVER_NAME"
-KEY_ID="$(hc GET "/ssh_keys?name=$KEY_NAME" | jsonq "(d['ssh_keys'][0]['id'] if d['ssh_keys'] else '')")"
-if [ -z "$KEY_ID" ]; then
-  # Two steps, not nested substitutions: macOS ships bash 3.2, whose parser mangles
-  # double-nested quoted $(...), brace-expanding the inner python and emptying the body.
-  KEY_BODY="$(python3 -c 'import json,sys; print(json.dumps({"name": sys.argv[1], "public_key": sys.argv[2]}))' "$KEY_NAME" "$PUBKEY")"
-  KEY_ID="$(hc POST /ssh_keys "$KEY_BODY" | jsonq "d['ssh_key']['id']")"
-fi
-ok "SSH key ready."
-
-say "Picking a server size…"
-TYPES_JSON="$(hc GET "/server_types?per_page=200")"
-SERVER_TYPE="$(printf '%s' "$TYPES_JSON" | python3 -c '
-import sys, json
-d = json.load(sys.stdin)
-best = None
-for t in d.get("server_types", []):
-    if t.get("deprecation") or t.get("architecture") != "x86" or (t.get("memory") or 0) < 4:
-        continue
-    for price in t.get("prices", []):
-        if price.get("location") == "fsn1":
-            monthly = float(price["price_monthly"]["gross"])
-            if best is None or monthly < best[0]:
-                best = (monthly, t["name"])
-print(best[1] if best else "cx23")
-')"
-ok "Using $SERVER_TYPE."
-say "Creating the server (this takes about a minute)…"
-CLOUD_INIT="$(curl -fsSL "$CLOUD_INIT_URL")"
-SERVER_JSON="$(hc GET "/servers?name=$SERVER_NAME")"
-SERVER_ID="$(echo "$SERVER_JSON" | jsonq "(d['servers'][0]['id'] if d['servers'] else '')")"
-if [ -z "$SERVER_ID" ]; then
-  CREATE_BODY="$(python3 - "$SERVER_NAME" "$KEY_ID" "$CLOUD_INIT" "$SERVER_TYPE" <<'PY'
-import json, sys
-name, key_id, user_data, server_type = sys.argv[1:5]
-print(json.dumps({
-    "name": name, "server_type": server_type, "location": "fsn1", "image": "ubuntu-24.04",
-    "ssh_keys": [int(key_id)], "user_data": user_data, "labels": {"app": "athena"},
-}))
-PY
-)"
-  CREATED="$(hc POST /servers "$CREATE_BODY")"
-  SERVER_ID="$(echo "$CREATED" | jsonq "d.get('server', {}).get('id') or sys.exit('create failed: ' + json.dumps(d)[:400])")"
-fi
-IP="$(hc GET "/servers/$SERVER_ID" | jsonq "d['server']['public_net']['ipv4']['ip']")"
-ok "Server created at $IP."
 
 SSH=(ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes "root@$IP")
 # -n keeps ssh's hands off stdin: under `curl | bash`, stdin is the script itself, and a
