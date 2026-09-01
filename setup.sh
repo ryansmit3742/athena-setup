@@ -107,7 +107,10 @@ except ValueError:
     sys.stderr.write('Unexpected reply from Hetzner: ' + raw[:300] + chr(10)); sys.exit(1)
 if isinstance(d, dict) and 'error' in d:
     e = d.get('error') or {}
-    sys.stderr.write('Hetzner said: ' + str(e.get('message') or e)[:300] + chr(10)); sys.exit(1)
+    sys.stderr.write('Hetzner said: ' + str(e.get('message') or e)[:300] + chr(10))
+    if e.get('code') in ('resource_limit_exceeded', 'forbidden', 'unauthorized'):
+        sys.stderr.write('This usually means the Hetzner account has no payment method yet. Add a card or PayPal at https://console.hetzner.cloud (top-right account menu, Billing), then run this same command again. Your token still works.' + chr(10))
+    sys.exit(1)
 print(eval(sys.argv[1]))
 " "$1"
 }
@@ -129,7 +132,11 @@ read -r -p "Press Return to start… " _ < /dev/tty || { echo "This wizard needs
 # ---------------------------------------------------------------------------
 HCLOUD_TOKEN="$(ask \
   "Step 1 of 4: Hetzner (your server)" \
-  "This is the actual computer Athena will run on, about \$7/month. Go to the link below, sign up (needs a payment method), click \"New project\" and name it anything, then inside that project go to Security → API Tokens → Generate API Token with Read & Write permission. Paste it below." \
+  "This is the actual computer Athena will run on, about \$7/month. This script creates the server for you, so don't create one yourself. At the link below:
+  1. Sign up, then add a payment method (card or PayPal). Hetzner won't create a server without one.
+  2. Click \"New project\" and name it anything.
+  3. Inside that project go to Security → API Tokens → Generate API Token, permission Read & Write.
+  4. Paste the token below." \
   "https://console.hetzner.cloud" \
   "Hetzner API token:" \
   '^.{20,}$')"   # loose on purpose: exact Hetzner format could change, don't risk trapping someone in a retry loop
@@ -161,7 +168,10 @@ OPENAI_API_KEY="$(ask \
 # ---------------------------------------------------------------------------
 TAILSCALE_AUTH_KEY="$(ask \
   "Step 4 of 4: Tailscale (keeps it private)" \
-  "A private network between just your phone and Athena's server. Nothing about her is ever exposed to the public internet. Sign in at the link below with Google, Microsoft, or Apple, then Settings → Keys → Generate auth key. Paste it below. (Also install the Tailscale app on your iPhone and sign in with the same account. You can do that anytime before or after this finishes.)" \
+  "A private network between just your phone and Athena's server. Nothing about her is ever exposed to the public internet. Sign in at the link below with a personal account (Apple, GitHub, or a personal Google account, not a work email: a work email drops you into your company's network where you can't change settings). Then:
+  1. Open the DNS page from the left menu, scroll to HTTPS Certificates, click Enable HTTPS, and confirm. Athena's address won't load without this.
+  2. Go to Settings → Keys → Generate auth key, and paste it below.
+  Also install the Tailscale app on your iPhone and sign in with the same account. You can do that anytime before or after this finishes." \
   "https://login.tailscale.com" \
   "Tailscale auth key:" \
   '^tskey-')"
@@ -304,7 +314,10 @@ ENV
 ok "Done."
 
 head1 "Installing Athena (this takes a few minutes, hang tight)"
-"${SSHN[@]}" "bash /root/athena/deploy/cloud/install.sh"
+"${SSHN[@]}" "bash /root/athena/deploy/cloud/install.sh" || {
+  fail "The install stopped before finishing. The lines just above say what to fix. Then run this same command again; it picks up where it left off."
+  exit 1
+}
 
 head1 "You're all set, $USER_NAME"
 APP_URL="$("${SSHN[@]}" cat /root/athena/app-url 2>/dev/null || true)"
